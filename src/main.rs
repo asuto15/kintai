@@ -1,5 +1,5 @@
+use chrono::{DateTime, FixedOffset, Local};
 use clap::{Parser, Subcommand};
-use chrono::{Local, DateTime, FixedOffset};
 use regex::Regex;
 use std::{
     fs::File,
@@ -169,12 +169,9 @@ fn export_markdown(input: Option<PathBuf>) -> anyhow::Result<()> {
     println!("| date | time | content |");
     println!("|------|------|---------|");
     for s in sessions {
-        println!(
-            "| {} | {} | {} |",
-            s.date, s.time_range, s.content
-        );
+        println!("| {} | {} | {} |", s.date, s.time_range, s.content);
     }
-    println!("");
+    println!();
 
     Ok(())
 }
