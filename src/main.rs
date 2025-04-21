@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, FixedOffset, Local, NaiveTime};
 use clap::{Parser, Subcommand};
 use regex::Regex;
 use std::{
@@ -19,13 +19,19 @@ struct Cli {
 enum Commands {
     Start,
     Finish {
-        content: String,
+        content: Option<String>,
     },
     BreakStart,
     BreakEnd,
     Export {
         #[arg(short, long)]
         input: Option<PathBuf>,
+    },
+    Summary {
+        #[arg(short, long)]
+        input: Option<PathBuf>,
+        #[arg(short, long)]
+        rate: Option<f64>,
     },
 }
 
@@ -44,17 +50,18 @@ struct ActiveSession {
 struct Session {
     date: String,
     time_range: String,
-    content: String,
+    content: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Commands::Start => record_event("start", None)?,
-        Commands::Finish { content } => record_event("finish", Some(content))?,
+        Commands::Finish { content } => record_event("finish", content)?,
         Commands::BreakStart => record_event("break_start", None)?,
         Commands::BreakEnd => record_event("break_end", None)?,
         Commands::Export { input } => export_markdown(input)?,
+        Commands::Summary { input, rate } => summary_markdown(input, rate)?,
     }
     Ok(())
 }
@@ -100,40 +107,21 @@ fn build_sessions(mut events: Vec<LogEvent>) -> Vec<Session> {
             "finish" => {
                 if let Some(a) = active.take() {
                     let finish = dt;
-                    let content = e.content.unwrap_or_default();
-                    let intervals = if a.breaks.is_empty() {
-                        vec![format!(
-                            "{}~{}",
-                            a.start.format("%H:%M"),
-                            finish.format("%H:%M")
-                        )]
-                    } else {
-                        let mut parts = Vec::new();
-                        let first_break = &a.breaks[0];
-                        parts.push(format!(
-                            "{}~{}",
-                            a.start.format("%H:%M"),
-                            first_break.0.format("%H:%M")
-                        ));
-                        for window in a.breaks.windows(2) {
-                            parts.push(format!(
-                                "{}~{}",
-                                window[0].1.format("%H:%M"),
-                                window[1].0.format("%H:%M")
-                            ));
-                        }
-                        let last_break = a.breaks.last().unwrap();
-                        parts.push(format!(
-                            "{}~{}",
-                            last_break.1.format("%H:%M"),
-                            finish.format("%H:%M")
-                        ));
-                        parts
-                    };
+                    let mut intervals = Vec::new();
+                    let mut cursor = a.start;
+                    for (bs, be) in &a.breaks {
+                        intervals.push((cursor, *bs));
+                        cursor = *be;
+                    }
+                    intervals.push((cursor, finish));
+                    let parts: Vec<String> = intervals
+                        .into_iter()
+                        .map(|(s, e)| format!("{}~{}", s.format("%H:%M"), e.format("%H:%M")))
+                        .collect();
                     sessions.push(Session {
                         date: a.start.format("%Y/%m/%d").to_string(),
-                        time_range: intervals.join(","),
-                        content,
+                        time_range: parts.join(","),
+                        content: e.content,
                     });
                 }
             }
@@ -144,6 +132,51 @@ fn build_sessions(mut events: Vec<LogEvent>) -> Vec<Session> {
 }
 
 fn export_markdown(input: Option<PathBuf>) -> anyhow::Result<()> {
+    let events = read_events(input)?;
+    let sessions = build_sessions(events);
+    println!("| date | time | content |");
+    println!("|------|------|---------|");
+    for s in sessions {
+        println!(
+            "| {} | {} | {} |",
+            s.date,
+            s.time_range,
+            s.content.unwrap_or_default()
+        );
+    }
+    println!();
+    Ok(())
+}
+
+fn summary_markdown(input: Option<PathBuf>, rate: Option<f64>) -> anyhow::Result<()> {
+    let events = read_events(input)?;
+    let sessions = build_sessions(events);
+    use std::collections::BTreeMap;
+    let mut monthly: BTreeMap<String, f64> = BTreeMap::new();
+    for s in &sessions {
+        let month = &s.date[..7];
+        let mut total = 0f64;
+        for part in s.time_range.split(',') {
+            let times: Vec<&str> = part.split('~').collect();
+            if let [start, end] = &times[..] {
+                let st = NaiveTime::parse_from_str(start, "%H:%M").unwrap();
+                let en = NaiveTime::parse_from_str(end, "%H:%M").unwrap();
+                total += (en - st).num_minutes() as f64 / 60.0;
+            }
+        }
+        *monthly.entry(month.to_string()).or_default() += total;
+    }
+    let rate = rate.unwrap_or(0.0);
+    println!("| month | hours | salary |");
+    println!("|-------|-------|--------|");
+    for (m, h) in monthly {
+        println!("| {} | {} | {} |", m, h, (h * rate).round());
+    }
+    println!();
+    Ok(())
+}
+
+fn read_events(input: Option<PathBuf>) -> anyhow::Result<Vec<LogEvent>> {
     let reader: Box<dyn BufRead> = if let Some(path) = input {
         Box::new(BufReader::new(File::open(path)?))
     } else {
@@ -163,15 +196,5 @@ fn export_markdown(input: Option<PathBuf>) -> anyhow::Result<()> {
             });
         }
     }
-
-    let sessions = build_sessions(events);
-
-    println!("| date | time | content |");
-    println!("|------|------|---------|");
-    for s in sessions {
-        println!("| {} | {} | {} |", s.date, s.time_range, s.content);
-    }
-    println!();
-
-    Ok(())
+    Ok(events)
 }
