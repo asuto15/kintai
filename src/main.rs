@@ -68,12 +68,12 @@ fn main() -> anyhow::Result<()> {
 
 fn record_event(event_type: &str, content: Option<String>) -> anyhow::Result<()> {
     let ts = Local::now().to_rfc3339();
-    let mut line = format!("ts={} type={}", ts, event_type);
+    let mut line = format!("ts={ts} type={event_type}");
     if let Some(c) = content {
         let esc = c.replace('"', "\\\"");
-        line.push_str(&format!(" content=\"{}\"", esc));
+        line.push_str(&format!(" content=\"{esc}\""));
     }
-    println!("{}", line);
+    println!("{line}");
     Ok(())
 }
 
@@ -170,7 +170,12 @@ fn summary_markdown(input: Option<PathBuf>, rate: Option<f64>) -> anyhow::Result
     println!("| month | hours | salary |");
     println!("|-------|-------|--------|");
     for (m, h) in monthly {
-        println!("| {} | {} | {} |", m, h, (h * rate).round());
+        let hours_i = h.floor() as u64;
+        let mins = ((h - hours_i as f64) * 60.0).round() as u64;
+        let dec_str = format!("{h:.2}h");
+        let hours_str = format!("{hours_i}h{mins:02}m");
+        let salary = (h * rate).round() as u64;
+        println!("| {m} | {hours_str} ({dec_str}) | {salary} |");
     }
     println!();
     Ok(())
