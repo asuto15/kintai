@@ -23,10 +23,6 @@ enum Commands {
     },
     BreakStart,
     BreakEnd,
-    Export {
-        #[arg(short, long)]
-        input: Option<PathBuf>,
-    },
     Summary {
         #[arg(short, long)]
         input: Option<PathBuf>,
@@ -60,8 +56,10 @@ fn main() -> anyhow::Result<()> {
         Commands::Finish { content } => record_event("finish", content)?,
         Commands::BreakStart => record_event("break_start", None)?,
         Commands::BreakEnd => record_event("break_end", None)?,
-        Commands::Export { input } => export_markdown(input)?,
-        Commands::Summary { input, rate } => summary_markdown(input, rate)?,
+        Commands::Summary { input, rate } => {
+            export_markdown(input.clone())?;
+            summary_markdown(input, rate)?
+        },
     }
     Ok(())
 }
