@@ -1,6 +1,6 @@
 # `kintai`: Attendance Record Manager
 
-A simple CLI tool written in Rust for recording work sessions and breaks in **logfmt** format, then exporting detailed daily logs and monthly summaries to Markdown.
+A simple CLI tool written in Rust for recording work sessions and breaks in **logfmt** format, then exporting detailed daily logs and monthly summaries to Markdown or Excel.
 
 **Note:** The name `kintai` means "attendance" in Japanese.
 
@@ -9,6 +9,7 @@ A simple CLI tool written in Rust for recording work sessions and breaks in **lo
 - **Start** a work session, **Finish** with optional notes.
 - Mark **Break Start** and **Break End**.
 - **Summary** daily sessions as a Markdown table and monthly totals with salary calculation.
+- **Excel**: Export a single-month attendance record to an `.xlsx` file (writes everything into `Sheet1`, automatically detects the month from the log).
 
 ## Installation
 
@@ -45,9 +46,9 @@ $ kintai break-end >> work.log
 $ kintai finish -- "Project meeting" >> work.log
 ```
 
-### Generate Report
+### Generate Report (Markdown)
 
-Use the summary command to produce both the daily session table and monthly summary:
+Use the `summary` command to produce both the daily session table and monthly summary:
 
 ```sh
 $ kintai summary --input work.log --rate 35.0
@@ -65,18 +66,52 @@ Example output:
 | 2025/04 | 8h00m (8.00h)    | 280    |
 ```
 
-### Commands
+### Export to Excel
 
-- start
+Use the `excel` command to export a single month’s attendance into an Excel file (`.xlsx`). It automatically detects which month to export by looking at the first session’s date in the log. All data is written into **Sheet1**.
+
+```sh
+$ kintai excel --input work.log --output attendance_2025_04.xlsx
+```
+
+- If you omit `--input`, it reads from standard input:
+  ```sh
+  $ cat work.log | kintai excel --output attendance.xlsx
+  ```
+- If you omit `--output`, the default filename is `YYYY_MM_勤務時間.xlsx`, where `YYYY` and `MM` are automatically determined from the year and month of the first session recorded in the log.
+
+Once run, you’ll see a message like:
+
+```plaintext
+Generated Excel file: attendance_2025_04.xlsx
+```
+
+Open that file and you’ll find:
+
+- **Sheet1**:
+  1. `A1`: Title (for example, `2025年4月の勤務時間記録`)
+  2. Row 3: Header row with `日付 | 勤務時間 | 作業内容`
+  3. From row 4 onward: Each session for that month (for example, `4月19日 | 15:30~16:30 | オンボーディング作業`, etc.)
+  4. Below the table, insert a blank row, then include the labels `勤務時間の合計` and the total time (for example, `15時間9分`)
+
+## Commands
+
+- `start`
   Record the start timestamp of a session.
 
-- finish [--content <note>]
+- `finish [--content <note>]`
   Record the end timestamp. Optionally add a note.
 
-- break-start / break-end
+- `break-start` / `break-end`
   Mark beginning and end of a break.
 
-- summary [-i <file>] [-r <rate>]Output daily sessions and monthly summary (reads from <file> or stdin, default rate = 0).
+- `summary [-i <file>] [-r <rate>]`
+  Output daily sessions and monthly summary (reads from `<file>` or stdin, default rate = 0).
+
+- `excel [-i <file>] [-o <file>]`
+  Export one month’s attendance to Excel.
+  - `-i, --input <file>`: ログファイルのパス（省略時は標準入力）。
+  - `-o, --output <file>`: 出力 `.xlsx` ファイルのパス（省略時は自動生成されたファイル名）。
 
 ## Log Format
 
