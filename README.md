@@ -110,8 +110,9 @@ Open that file and you’ll find:
 
 - `excel [-i <file>] [-o <file>]`
   Export one month’s attendance to Excel.
-  - `-i, --input <file>`: ログファイルのパス（省略時は標準入力）。
-  - `-o, --output <file>`: 出力 `.xlsx` ファイルのパス（省略時は自動生成されたファイル名）。
+  - `-i, --input <file>`: Path to the log file (defaults to stdin if omitted).
+  - `-o, --output <file>`: Path to the output `.xlsx` file (defaults to an auto-generated filename(`YYYY_MM_勤務時間.xlsx`) if omitted).
+
 
 ## Log Format
 
